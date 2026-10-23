@@ -1,6 +1,6 @@
 {
   "name": "gladys-lcn",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "Gladys Assistant external integration for LCN building automation (outputs, relays, sensors, variables, scenes, keys) through LCN-PCHK. Unofficial, not affiliated with LCN.",
   "type": "module",

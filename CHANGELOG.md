@@ -10,6 +10,8 @@ the notes of the version's GitHub Release.
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-10-23
+
 ### Added
 
 - LCN through LCN-PCHK: login (user name and password), decimal and
@@ -51,4 +53,5 @@ the notes of the version's GitHub Release.
   illuminance is capped to its declared maximum; catalog categories
   "lighting" and "protocols".
 
-[Unreleased]: https://github.com/LM1LC3N7/gladys-lcn/commits/main
+[Unreleased]: https://github.com/LM1LC3N7/gladys-lcn/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/LM1LC3N7/gladys-lcn/releases/tag/v0.1.1
