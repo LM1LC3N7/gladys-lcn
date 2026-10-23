@@ -144,7 +144,7 @@ test('Ports: lights, switches, sensors, variables of new and old modules', async
     ['b1_motion', 'motion-sensor', 'binary', null],
     ['var1_temperature', 'temperature-sensor', 'decimal', 'celsius'],
     ['var4_humidity', 'humidity-sensor', 'decimal', 'percent'],
-    ['sp1_setpoint', 'thermostat', 'target-temperature', 'celsius'],
+    ['sp1_setpoint', 'temperature-sensor', 'decimal', 'celsius'],
   ]);
   assert.match(ctx.logger.lines.join('\n'), /Ports not understood: M5\.X9, M300\.A1, M5\.A1:pump/);
   assert.match(ctx.status().message.en, /Not understood in "Ports": M5\.X9/);
@@ -424,4 +424,154 @@ test('the test button: connected, it only reports', async (t) => {
   const ack = await ctx.gladys.fake.action('test_connection');
   assert.equal(ack.success, true, ack.error);
   assert.equal(ctx.pchk.sockets.length, sockets);
+});
+
+/** 10 modules (M5 to M14), 4 outputs each, all on. */
+const manyModules = () =>
+  Object.fromEntries(
+    Array.from({ length: 10 }, (_, i) => [
+      `0-${5 + i}`,
+      {
+        serial: `00000000${String(10 + i)}`,
+        firmware: '190B11',
+        hardware: 17,
+        name: [`Room ${i}`, ''],
+        outputs: { 1: 100, 2: 100, 3: 100, 4: 100 },
+        relays: 0,
+        binaries: 0,
+        variables: {},
+      },
+    ]),
+  );
+const MANY_PORTS = Array.from(
+  { length: 40 },
+  (_, i) => `M${5 + Math.floor(i / 4)}.A${(i % 4) + 1}:light`,
+).join(', ');
+
+test('"turn everything off" of 40 lights: every off written before its deadline, before the reads', async (t) => {
+  const ctx = await setup(t, { config: { ports: MANY_PORTS }, pchk: { modules: manyModules() } });
+  const start = ctx.pchk.lines.length;
+  const pending = [];
+  for (let i = 0; i < 40; i += 1) {
+    const deviceIds = ctx.gladys.externalIds('module', `0-${5 + Math.floor(i / 4)}`);
+    const [d, f] = ctx.feature(`a${(i % 4) + 1}_light`, deviceIds);
+    pending.push(ctx.gladys.fake.setValue(d, f, 0));
+  }
+  await ctx.clock.advance(6_000);
+  const acks = await Promise.all(pending);
+  assert.deepEqual(
+    acks.filter((a) => !a.success).map((a) => a.error),
+    [],
+  );
+  const written = ctx.pchk.lines.slice(start);
+  const offs = written.filter((l) => /DI000000$/.test(l));
+  assert.equal(offs.length, 40);
+  // The 40 offs come first, the reads behind them.
+  assert.ok(written.slice(0, 40).every((l) => /DI000000$/.test(l)));
+});
+
+test('an off waits behind no "turn on" of other ports', async (t) => {
+  const ctx = await setup(t, { config: { ports: MANY_PORTS }, pchk: { modules: manyModules() } });
+  const pending = [];
+  for (let i = 0; i < 30; i += 1) {
+    const deviceIds = ctx.gladys.externalIds('module', `0-${5 + Math.floor(i / 4)}`);
+    const [d, f] = ctx.feature(`a${(i % 4) + 1}_brightness`, deviceIds);
+    pending.push(ctx.gladys.fake.setValue(d, f, 60));
+  }
+  const last = ctx.gladys.externalIds('module', '0-14');
+  const [d, f] = ctx.feature('a4_light', last);
+  const start = ctx.pchk.lines.length;
+  const stop = ctx.gladys.fake.setValue(d, f, 0);
+  await ctx.clock.advance(6_000);
+  assert.equal((await stop).success, true);
+  await Promise.all(pending);
+  const written = ctx.pchk.lines.slice(start - 30 > 0 ? start : 0);
+  const at = ctx.pchk.lines.indexOf('>M000014.A4DI000000');
+  const firstOn = ctx.pchk.lines.findIndex((l) => /DI060000$/.test(l));
+  assert.ok(written.length > 0);
+  // At most the "on" already on the socket went before it.
+  assert.ok(at <= firstOn + 1, `off at ${at}, first on at ${firstOn}`);
+});
+
+test('PCHK closing the session right after the password, twice: stopped, persisted', async (t) => {
+  const store = memoryStore();
+  const ctx = await setup(t, { pchk: { closeAfterPassword: true }, store, ready: false });
+  await ctx.clock.advance(3_600_000);
+  await ctx.app.chain;
+  assert.equal(ctx.pchk.sockets.length, 2, 'the password went twice, never more');
+  assert.equal(store.data.stop.kind, 'login_refused');
+  assert.match(ctx.status().message.en, /closed the session right after the password/);
+});
+
+test('hostile addresses: a scan answer from a broadcast or an odd segment is no module; a scene or a feature of another id is refused', async (t) => {
+  const ctx = await setup(t, {
+    config: { allow_scenes: true, allow_output_buttons: true },
+    pchk: { extraAcks: ['-M999005!', '-M003010!', '-M000004!', '-M000255!'] },
+  });
+  const ids = ctx.gladys.fake.discoveredDevices.map((d) => d.external_id.split(':').at(-1));
+  assert.deepEqual(ids, ['0-5', '0-7']);
+  const before = ctx.pchk.lines.length;
+  for (const module of [
+    'ext:other:module:3-3',
+    'ext:other:module:0-5',
+    'ext:other:module:999-999',
+    'foo:module:0-4',
+    ctx.gladys.externalIds('module', '0-4').device,
+    ctx.gladys.externalIds('module', '3-10').device,
+    'M4',
+    'S3M10',
+  ]) {
+    const ack = await ctx.gladys.fake.sceneAction('activate_scene', {
+      module,
+      register: 0,
+      scene: 1,
+    });
+    assert.equal(ack.success, false, module);
+    assert.match(ack.error, /not an LCN module of this integration/);
+  }
+  const forged = { external_id: 'ext:other:module:0-5:a1_on' };
+  let ack = await ctx.gladys.fake.setValue({ external_id: 'ext:other:module:0-5' }, forged, 1);
+  assert.equal(ack.success, false);
+  const broadcast = { external_id: ctx.gladys.externalIds('module', '3-10').feature('a1_on') };
+  ack = await ctx.gladys.fake.setValue({ external_id: 'x' }, broadcast, 1);
+  assert.equal(ack.success, false);
+  assert.equal(ctx.pchk.lines.length, before, 'nothing written');
+});
+
+test('a line break in the credentials: never sent', async (t) => {
+  const ctx = await setup(t, { config: { password: 'pw\n>M000005.R811111111' }, ready: false });
+  await ctx.clock.advance(30_000);
+  assert.equal(ctx.pchk.sockets.length, 0);
+  assert.match(ctx.status().message.en, /line break/);
+});
+
+test('the test button respects the licence pause', async (t) => {
+  const ctx = await setup(t, { pchk: { licence: true }, ready: false });
+  await ctx.clock.advance(20_000);
+  await ctx.app.chain;
+  const sockets = ctx.pchk.sockets.length;
+  const ack = await ctx.gladys.fake.action('test_connection');
+  assert.equal(ack.success, false);
+  assert.match(ack.error, /licence error .* Next try in \d+ min/);
+  assert.equal(ctx.pchk.sockets.length, sockets);
+});
+
+test('an off cancels an LCN scene of the same module still waiting', async (t) => {
+  const ctx = await setup(t, { config: { ports: PORTS, allow_scenes: true } });
+  const [d, f] = ctx.feature('a2_switch');
+  const first = ctx.gladys.fake.setValue(d, f, 1);
+  const scene = ctx.gladys.fake.sceneAction('activate_scene', {
+    module: ctx.ids.device,
+    register: 0,
+    scene: 2,
+  });
+  const [, light] = ctx.feature('a1_light');
+  const off = ctx.gladys.fake.setValue(d, light, 0);
+  await ctx.clock.advance(6_000);
+  assert.equal((await first).success, true);
+  assert.equal((await off).success, true);
+  const ack = await scene;
+  assert.equal(ack.success, false);
+  assert.match(ack.error, /"turn off" of this module was asked meanwhile/);
+  assert.ok(!ctx.pchk.lines.some((l) => l.includes('SZ')));
 });

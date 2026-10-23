@@ -155,3 +155,28 @@ up to date at the end of every milestone.
 - **Not checked**: Docker is not installed on this PC, so no image build and
   no end-to-end test in a container; never run against a real installation;
   the store validator was not run by the development agent.
+
+## Decisions after the review 1 (2026-10-23)
+
+- **B1 - protective queue**: a turn off (0 %, relay off) goes to a queue of
+  its own, written before the commands and the reads, with the 60 ms line
+  gap only (no wait for a quiet bus), each checked against its deadline right
+  before the write: 40 offs take 2.4 s. The status read after a command goes
+  to the background queue (one per port, merged with the same read waiting);
+  the modules send their changes by themselves too. Tests: 40 offs at once,
+  30 "on" waiting then an off.
+- **I1 - silent refusal**: a session that ends after the password and before
+  "OK" (closed, error, login timeout) counts; twice in a row with the same
+  credentials it is a refused login (final, persisted with the salted
+  fingerprint, lifted by other credentials or a successful test). A prompt
+  without the password sent stays a passing failure.
+- **I2 - addresses**: segment 0 or 5 to 127, module 5 to 254 everywhere (scan
+  collector, "Ports", feature and device ids); a feature or device id must be
+  exactly the one this integration builds (its selector); a scene never goes
+  to PCHK (4) nor to a broadcast (segment 3).
+- **Minor**: credentials with a control character are never sent (status
+  says so; the client also refuses any line holding one); the spacing after a
+  configuration change uses the real time of the last attempt; the test
+  button gives the time left of a licence pause instead of trying; a turn off
+  cancels a waiting LCN scene of the same module; lux capped to 100 000; set
+  points are temperature sensors; categories lighting and protocols.

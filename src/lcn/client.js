@@ -81,6 +81,10 @@ export class LcnClient extends EventEmitter {
     this.ready = false;
     this.failures = 0;
     this.licenceFailures = 0;
+    /** Sessions ended after the password, before PCHK said OK, in a row. */
+    this.authDrops = 0;
+    /** Turn off, 0 %: before everything else. */
+    this.protective = [];
     this.urgent = [];
     this.background = [];
     this.waiters = new Set();
@@ -119,6 +123,7 @@ export class LcnClient extends EventEmitter {
     this.running = true;
     this.failures = 0;
     this.licenceFailures = 0;
+    this.authDrops = 0;
     if (delay > 0) {
       this.reconnectTimer = this.timers.setTimeout(() => {
         this.reconnectTimer = undefined;
@@ -163,7 +168,11 @@ export class LcnClient extends EventEmitter {
     for (const waiter of [...this.waiters]) {
       waiter.fail(new LcnError('The connection to PCHK ended', 'lost', { sent: true }));
     }
-    for (const entry of [...this.urgent.splice(0), ...this.background.splice(0)]) {
+    for (const entry of [
+      ...this.protective.splice(0),
+      ...this.urgent.splice(0),
+      ...this.background.splice(0),
+    ]) {
       entry.reject(new LcnError('Not connected to PCHK', 'offline'));
     }
     for (const collect of this.collectors) collect.end?.();
@@ -235,6 +244,12 @@ export class LcnClient extends EventEmitter {
   /** A line during the login or the setup; written at once, never queued. */
   writeRaw(generation, text, { secret = false } = {}) {
     if (generation !== this.generation || !this.socket) return false;
+    // eslint-disable-next-line no-control-regex
+    if (/[\u0000-\u001f\u007f]/.test(text)) {
+      // A line break would make two PCK lines: never written.
+      this.lost(generation, 'a control character in a line to write', { refused: secret });
+      return false;
+    }
     try {
       this.socket.write(`${text}\n`);
     } catch (err) {
@@ -275,6 +290,7 @@ export class LcnClient extends EventEmitter {
       case 'auth_ok':
         if (this.phase !== 'login') return;
         this.phase = 'dec';
+        this.authDrops = 0;
         this.writeRaw(generation, LOGIN.decMode);
         return;
       case 'licence':
@@ -392,6 +408,15 @@ export class LcnClient extends EventEmitter {
     if (generation !== this.generation) return;
     this.generation += 1;
     const wasUp = this.ready;
+    // Ended after the password and before "OK" (closed, error, timeout): PCHK
+    // may be refusing it without saying so. Twice in a row: refused, final.
+    if (!refused && !licence && this.sentPassword && this.phase === 'login') {
+      this.authDrops += 1;
+      if (this.authDrops >= LIMITS.authDrops) {
+        refused = true;
+        reason = `${reason}, right after the password (${this.authDrops} times in a row)`;
+      }
+    }
     this.close();
     if (!this.running) return;
     let retryIn;
@@ -423,19 +448,25 @@ export class LcnClient extends EventEmitter {
    * Queues a line (header included, no newline); resolves once written (with
    * the matched value when `wait` is given: { match(input) -> value |
    * undefined, timeout | until }, only lines received after the write count).
-   * `urgent`: before the background reads. `sendBy` (a time): never written
-   * after it. `check`: called right before the write, returns a refusal kind
-   * ('withdrawn', 'cancelled') or nothing. `ticket.onWritten` is called once
-   * it is on the socket.
+   * `protective` (a turn off): before everything else, written without
+   * waiting for a quiet bus. `urgent`: before the background reads. `sendBy`
+   * (a time): never written after it. `check`: called right before the write,
+   * returns a refusal kind ('withdrawn', 'cancelled') or nothing.
+   * `ticket.onWritten` is called once it is on the socket.
    */
-  send(text, { urgent = false, sendBy, check, ticket = {}, wait, label } = {}) {
+  send(text, { protective = false, urgent = false, sendBy, check, ticket = {}, wait, label } = {}) {
     return new Promise((resolve, reject) => {
       ticket.written = false;
       if (!this.socket || !this.ready) {
         reject(new LcnError('Not connected to PCHK', 'offline'));
         return;
       }
-      if (!urgent && !wait) {
+      // eslint-disable-next-line no-control-regex
+      if (/[\u0000-\u001f\u007f]/.test(text)) {
+        reject(new LcnError('A control character in the line', 'offline'));
+        return;
+      }
+      if (!urgent && !protective && !wait) {
         // The same background read already waiting: one line for both.
         const twin = this.background.find((e) => !e.wait && e.text === text);
         if (twin) {
@@ -443,8 +474,8 @@ export class LcnClient extends EventEmitter {
           return;
         }
       }
-      const queue = urgent ? this.urgent : this.background;
-      if (queue.length >= (urgent ? LIMITS.maxUrgent : LIMITS.maxQueue)) {
+      const queue = protective ? this.protective : urgent ? this.urgent : this.background;
+      if (queue.length >= (protective || urgent ? LIMITS.maxUrgent : LIMITS.maxQueue)) {
         reject(new LcnError('Too many lines waiting for PCHK', 'full'));
         return;
       }
@@ -472,7 +503,7 @@ export class LcnClient extends EventEmitter {
     if (!this.socket || !this.ready) return;
     const now = this.now();
     // Lines too late are dropped before anything else: never written.
-    for (const queue of [this.urgent, this.background]) {
+    for (const queue of [this.protective, this.urgent, this.background]) {
       for (let i = queue.length - 1; i >= 0; i -= 1) {
         if (queue[i].sendBy !== undefined && now > queue[i].sendBy) {
           const [late] = queue.splice(i, 1);
@@ -480,13 +511,21 @@ export class LcnClient extends EventEmitter {
         }
       }
     }
-    const queue = this.urgent.length > 0 ? this.urgent : this.background;
+    const protective = this.protective.length > 0;
+    const queue = protective
+      ? this.protective
+      : this.urgent.length > 0
+        ? this.urgent
+        : this.background;
     if (queue.length === 0) return;
-    // pypck waits for 50 ms of quiet on the bus; a busy bus never holds a line long.
-    const at = Math.max(
-      this.lastWriteAt + TIMINGS.lineGap,
-      Math.min(this.lastReadAt + TIMINGS.busIdle, this.lastWriteAt + TIMINGS.idleCap),
-    );
+    // pypck waits for 50 ms of quiet on the bus; a busy bus never holds a line
+    // long, and a turn off never waits for it (only the gap between lines).
+    const at = protective
+      ? this.lastWriteAt + TIMINGS.lineGap
+      : Math.max(
+          this.lastWriteAt + TIMINGS.lineGap,
+          Math.min(this.lastReadAt + TIMINGS.busIdle, this.lastWriteAt + TIMINGS.idleCap),
+        );
     if (at > now) {
       this.pumpTimer = this.timers.setTimeout(() => {
         this.pumpTimer = undefined;
@@ -565,6 +604,8 @@ export class LcnClient extends EventEmitter {
     const collect = (input) => {
       if (input.kind !== 'ack') return;
       if (input.module < LIMITS.minModule || input.module > LIMITS.maxModule) return;
+      // Segment 0 (local) or 5 to 127: never 3 (broadcast) nor 4 (status messages).
+      if (input.seg !== 0 && (input.seg < 5 || input.seg > LIMITS.maxSegment)) return;
       if (found.size >= LIMITS.maxModules) return;
       found.add(`${input.seg}-${input.module}`);
       lastAnswer = this.now();

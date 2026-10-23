@@ -27,7 +27,7 @@ import {
   DEVICE_FEATURE_TYPES as T,
   DEVICE_FEATURE_UNITS as U,
 } from '@gladysassistant/integration-sdk';
-import { moduleKey, moduleLabel, portInfo, portsOf } from './config.js';
+import { moduleKey, moduleLabel, portInfo, portsOf, validAddress } from './config.js';
 import { DEVICE_NAME, featureName, word } from './i18n.js';
 import { convertVariable, hardwareName } from './lcn/pck.js';
 
@@ -72,7 +72,8 @@ export const ROLE_FEATURES = {
   lux: reading(C.LIGHT_SENSOR, T.SENSOR.DECIMAL, { unit: U.LUX, min: 0, max: 100_000 }),
   co2: reading(C.CO2_SENSOR, T.SENSOR.INTEGER, { unit: U.PPM, min: 0, max: 10_000 }),
   value: reading(C.UNKNOWN, T.UNKNOWN.UNKNOWN, { min: 0, max: 65_535 }),
-  setpoint: reading(C.THERMOSTAT, T.THERMOSTAT.TARGET_TEMPERATURE, {
+  // Read only: a temperature sensor, never a thermostat a voice assistant could offer to set.
+  setpoint: reading(C.TEMPERATURE_SENSOR, T.SENSOR.DECIMAL, {
     unit: U.CELSIUS,
     min: -50,
     max: 150,
@@ -104,26 +105,33 @@ export const familyRoles = (family) => new Set(Object.values(KIND_ROLES[family] 
 export const ids = (gladys, seg, module) => gladys.externalIds('module', moduleKey(seg, module));
 
 /** `ext:sel:module:0-5:a1_light` -> { seg, module, port, role, family, number }. */
-export function parseFeatureId(externalId) {
-  const match = /:module:(\d{1,3})-(\d{1,3}):([a-z]{1,3}\d{1,2})_([a-z0-9]{1,12})$/.exec(
-    String(externalId ?? ''),
-  );
+export function parseFeatureId(externalId, gladys) {
+  const text = String(externalId ?? '');
+  const match = /:module:(\d{1,3})-(\d{1,3}):([a-z]{1,3}\d{1,2})_([a-z0-9]{1,12})$/.exec(text);
   if (!match) return undefined;
+  const seg = Number(match[1]);
+  const module = Number(match[2]);
   const info = portInfo(match[3]);
-  if (!info || !familyRoles(info.family).has(match[4])) return undefined;
-  return {
-    seg: Number(match[1]),
-    module: Number(match[2]),
-    port: match[3],
-    role: match[4],
-    ...info,
-  };
+  if (!info || !familyRoles(info.family).has(match[4]) || !validAddress(seg, module)) {
+    return undefined;
+  }
+  // Only a feature of this integration: the exact id it would build.
+  if (gladys && ids(gladys, seg, module).feature(`${match[3]}_${match[4]}`) !== text) {
+    return undefined;
+  }
+  return { seg, module, port: match[3], role: match[4], ...info };
 }
 
-/** `ext:sel:module:0-5` -> { seg, module }. */
-export function parseDeviceId(externalId) {
-  const match = /:module:(\d{1,3})-(\d{1,3})$/.exec(String(externalId ?? ''));
-  return match ? { seg: Number(match[1]), module: Number(match[2]) } : undefined;
+/** `ext:sel:module:0-5` (a device of this integration, a valid address) -> { seg, module }. */
+export function parseDeviceId(externalId, gladys) {
+  const text = String(externalId ?? '');
+  const match = /:module:(\d{1,3})-(\d{1,3})$/.exec(text);
+  if (!match) return undefined;
+  const seg = Number(match[1]);
+  const module = Number(match[2]);
+  if (!validAddress(seg, module)) return undefined;
+  if (gladys && ids(gladys, seg, module).device !== text) return undefined;
+  return { seg, module };
 }
 
 /** What a discovered feature declares (a created one also has ids, values, dates). */

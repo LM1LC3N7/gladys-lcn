@@ -142,6 +142,8 @@ export class LcnApp {
     this.readBacks = new Set();
     /** port key -> Set of tokens of the "turn on" commands not yet written. */
     this.pendingOn = new Map();
+    /** module key -> Set of tokens of the LCN scenes not yet written. */
+    this.pendingScenes = new Map();
     this.starting = Promise.resolve();
     this.pendingEvents = [];
     this.flushScheduled = false;
@@ -264,11 +266,10 @@ export class LcnApp {
     } else {
       await this.setStatus(false, T.connecting, epoch);
     }
-    // A restart never connects faster than the spacing of the attempts.
-    const spacing = Math.min(
-      TIMINGS.minAttemptGap,
-      memory.lastAttemptAt + TIMINGS.minAttemptGap - now,
-    );
+    // A restart or a new configuration never connects faster than the spacing
+    // of the attempts (the real time of the last one, in memory, or in /data).
+    const last = Math.max(this.lastAttemptAt, memory.lastAttemptAt);
+    const spacing = Math.min(TIMINGS.minAttemptGap, last + TIMINGS.minAttemptGap - now);
     if (epoch !== this.epoch) return;
     this.connect(Math.max(delay, spacing, 0));
     this.startTimers();
@@ -316,6 +317,7 @@ export class LcnApp {
   configProblem() {
     if (!this.config.host) return T.noHost;
     if (!this.config.username) return T.noUser;
+    if (this.config.credentialsInvalid) return T.badCredentials;
     return undefined;
   }
 
@@ -750,7 +752,7 @@ export class LcnApp {
 
   async setValue(_device, feature, value) {
     const asked = this.now();
-    const target = parseFeatureId(feature?.external_id);
+    const target = parseFeatureId(feature?.external_id, this.gladys);
     if (!target) throw this.refused(T.readOnly);
     const { seg, module, port, role, family, number } = target;
     if (!['output', 'relay'].includes(family) || role === 'state' || role === 'level') {
@@ -827,9 +829,11 @@ export class LcnApp {
 
   /**
    * One command: written before the deadline (or refused, nothing sent), a
-   * status read of the port queued right behind it, confirmed by a status
-   * equal to the value asked. A protective one (off, 0 %) cancels the "turn
-   * on" of the same port still waiting, and is never cancelled itself.
+   * status read of the port asked in the background (one per port, merged),
+   * confirmed by a status equal to the value asked. A protective one (off,
+   * 0 %) goes to the protective queue, before every other command and every
+   * read; it cancels the "turn on" of the same port and the LCN scene of the
+   * same module still waiting, and is never cancelled itself.
    */
   async command({ seg, module, port, asked, protective, gate, what, line, read, confirm }) {
     const label = word(what, 'en');
@@ -837,6 +841,9 @@ export class LcnApp {
     const token = { cancelled: false };
     if (protective) {
       for (const pending of this.pendingOn.get(portKey) ?? []) pending.cancelled = true;
+      for (const pending of this.pendingScenes.get(moduleKey(seg, module)) ?? []) {
+        pending.cancelled = true;
+      }
     } else {
       if (!this.pendingOn.has(portKey)) this.pendingOn.set(portKey, new Set());
       this.pendingOn.get(portKey).add(token);
@@ -851,14 +858,16 @@ export class LcnApp {
       if (this.now() > asked + TIMINGS.sendBy) throw new LcnError('too late', 'late');
       this.logger.info(`Command from Gladys: ${label}`);
       const done = this.client.send(head + line, {
-        urgent: true,
+        protective,
+        urgent: !protective,
         sendBy: asked + TIMINGS.sendBy,
         check,
         label,
         wait: { match: confirm, until: asked + TIMINGS.answerBy },
       });
-      // Right behind the command: the module tells its state (it also sends it by itself).
-      this.client.send(head + read, { urgent: true, sendBy: asked + TIMINGS.sendBy }).catch(quiet);
+      // The module also sends its state by itself; a read in the background,
+      // after every command, merged with the same read already waiting.
+      this.client.send(head + read, { sendBy: asked + TIMINGS.sendBy }).catch(quiet);
       await done;
       this.logger.info(`Command confirmed by the module (${label})`);
     } catch (err) {
@@ -877,7 +886,7 @@ export class LcnApp {
       this.logger.warn(`Command NOT sent (${label}): ${err.message}`);
       if (err.kind === 'withdrawn')
         return this.refused(scene ? T.scenesDisabled : T.buttonsDisabled);
-      if (err.kind === 'cancelled') return this.refused(T.cancelled);
+      if (err.kind === 'cancelled') return this.refused(scene ? T.sceneCancelled : T.cancelled);
       if (err.kind === 'late') return this.refused(T.tooLate);
       if (err.kind === 'full') return this.refused(T.queueFull);
       return this.refused(T.offline);
@@ -908,7 +917,8 @@ export class LcnApp {
       this.logger.warn('LCN scene REFUSED: disabled in the configuration');
       throw this.refused(T.scenesDisabled);
     }
-    const ref = parseDeviceId(fields.module) ?? parseModuleRef(fields.module);
+    // A device of this integration only (or `M5` / `S12M5`): never PCHK, a broadcast, another id.
+    const ref = parseDeviceId(fields.module, this.gladys) ?? parseModuleRef(fields.module);
     const register = numberOf(fields.register);
     const scene = numberOf(fields.scene);
     const target = fields.target ?? 'both';
@@ -925,10 +935,18 @@ export class LcnApp {
     const what = fill(COMMAND_NAMES.scene, moduleLabel(ref.seg, ref.module), register, scene);
     const label = word(what, 'en');
     const head = this.client.header(ref.seg, ref.module);
+    // A "turn off" of the same module asked meanwhile cancels what is not written yet.
+    const key = moduleKey(ref.seg, ref.module);
+    const token = { cancelled: false };
+    if (!this.pendingScenes.has(key)) this.pendingScenes.set(key, new Set());
+    this.pendingScenes.get(key).add(token);
     const options = {
       urgent: true,
       sendBy: asked + TIMINGS.sendBy,
-      check: () => (this.config.allowScenes ? undefined : 'withdrawn'),
+      check: () => {
+        if (token.cancelled) return 'cancelled';
+        return this.config.allowScenes ? undefined : 'withdrawn';
+      },
     };
     const lines = [PCK.sceneRegister(register)];
     if (target !== 'relays') lines.push(PCK.sceneOutputs(scene));
@@ -941,9 +959,14 @@ export class LcnApp {
         written += 1;
       }
     } catch (err) {
-      if (written > 0 && err instanceof LcnError && !err.sent)
+      if (written > 0 && err instanceof LcnError && !err.sent) {
         throw this.error(T.scenePartial, err);
+      }
       throw this.sendError(err, { label, what, scene: true });
+    } finally {
+      const set = this.pendingScenes.get(key);
+      set?.delete(token);
+      if (set?.size === 0) this.pendingScenes.delete(key);
     }
     return undefined;
   }
@@ -984,6 +1007,11 @@ export class LcnApp {
       const last = Math.max(this.lastAttemptAt, memory.lastAttemptAt);
       const wait = last + TIMINGS.minAttemptGap - this.now();
       if (wait > 0) throw this.error(fill(T.tooSoon, Math.ceil(wait / 1000)));
+      // The licence pause holds for the button too: the time left is said.
+      const pause = memory.pause;
+      if (pause && pause.place === placeKey(this.config) && pause.until > this.now()) {
+        throw this.error(fill(T.licence, Math.ceil((pause.until - this.now()) / 60_000)));
+      }
       await this.setStatus(false, T.connecting);
       this.connect(0);
       this.startTimers();

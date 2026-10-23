@@ -10,7 +10,7 @@
   "docker_image": "ghcr.io/lm1lc3n7/gladys-lcn:0.1.0",
   "gladys_version": ">=5.1.0",
   "cover_image": "https://raw.githubusercontent.com/LM1LC3N7/gladys-lcn/main/cover.png",
-  "categories": ["lighting", "security"],
+  "categories": ["lighting", "protocols"],
   "transports": ["local"],
   "config_schema": [
     {
@@ -99,8 +99,8 @@
         "fr": "Mot de passe de PCHK"
       },
       "description": {
-        "en": "Kept by Gladys in its database, never shown again, sent only to PCHK, never written in the logs. PCHK receives it in clear text on your network (its protocol is not protected). A password refused by PCHK stops the connection: no new try with it.",
-        "fr": "Gardé par Gladys dans sa base, jamais réaffiché, envoyé seulement à PCHK, jamais écrit dans les journaux. PCHK le reçoit en clair sur votre réseau (son protocole n'est pas protégé). Un mot de passe refusé par PCHK arrête la connexion : aucun nouvel essai avec lui."
+        "en": "Kept by Gladys in its database, never shown again, sent only to PCHK, never written in the logs. PCHK receives it in clear text on your network (its protocol is not protected). A password refused by PCHK (or a session closed right after it, twice in a row) stops the connection: no new try with it.",
+        "fr": "Gardé par Gladys dans sa base, jamais réaffiché, envoyé seulement à PCHK, jamais écrit dans les journaux. PCHK le reçoit en clair sur votre réseau (son protocole n'est pas protégé). Un mot de passe refusé par PCHK (ou une session fermée juste après lui, deux fois de suite) arrête la connexion : aucun nouvel essai avec lui."
       },
       "required": false
     },
@@ -142,8 +142,8 @@
         "fr": "Ports"
       },
       "description": {
-        "en": "What each module shows, e.g. \"M5.A1:light, M5.R3:switch, M5.B1:motion, M7.TVAR, M7.VAR4:humidity\" (module as in LCN-PRO, S12M5 on segment 12). Outputs A1-A4 and relays R1-R8: read only by default, \"light\" or \"switch\" to control them; a light or a switch obeys Google, Alexa, the MCP (\"turn everything off\") and the scenes: never declare a pump, a heater, a door strike or a valve. Binary sensors B1-B8 (\"motion\" optional); variables TVAR, R1VAR, R2VAR, VAR1-VAR12 (temperature by default, or humidity, lux, co2, value); set points R1VARSETPOINT, R2VARSETPOINT (read only). A module not listed shows A1 and A2, read only.",
-        "fr": "Ce que montre chaque module, par ex. « M5.A1:light, M5.R3:switch, M5.B1:motion, M7.TVAR, M7.VAR4:humidity » (module comme dans LCN-PRO, S12M5 sur le segment 12). Sorties A1-A4 et relais R1-R8 : lecture seule par défaut, « light » ou « switch » pour les commander ; une lumière ou un interrupteur obéit à Google, Alexa, au MCP (« éteins tout ») et aux scènes : ne déclarez jamais une pompe, un chauffage, une gâche ou une vanne. Capteurs binaires B1-B8 (« motion » en option) ; variables TVAR, R1VAR, R2VAR, VAR1-VAR12 (température par défaut, ou humidity, lux, co2, value) ; consignes R1VARSETPOINT, R2VARSETPOINT (lecture seule). Un module non listé montre A1 et A2, en lecture seule."
+        "en": "What each module shows, e.g. \"M5.A1:light, M5.R3:switch, M5.B1:motion, M7.TVAR, M7.VAR4:humidity\" (module as in LCN-PRO, S12M5 on segment 12). Outputs A1-A4 and relays R1-R8: read only by default, \"light\" or \"switch\" to control them; a light or a switch obeys Google, Alexa, the MCP (\"turn everything off\") and the scenes: never declare a pump, a heater, a door strike or a valve. Binary sensors B1-B8 (\"motion\" optional); variables TVAR, R1VAR, R2VAR, VAR1-VAR12 (temperature by default, or humidity, lux, co2, value); set points R1VARSETPOINT, R2VARSETPOINT (read only, shown as temperatures). A module not listed shows A1 and A2, read only.",
+        "fr": "Ce que montre chaque module, par ex. « M5.A1:light, M5.R3:switch, M5.B1:motion, M7.TVAR, M7.VAR4:humidity » (module comme dans LCN-PRO, S12M5 sur le segment 12). Sorties A1-A4 et relais R1-R8 : lecture seule par défaut, « light » ou « switch » pour les commander ; une lumière ou un interrupteur obéit à Google, Alexa, au MCP (« éteins tout ») et aux scènes : ne déclarez jamais une pompe, un chauffage, une gâche ou une vanne. Capteurs binaires B1-B8 (« motion » en option) ; variables TVAR, R1VAR, R2VAR, VAR1-VAR12 (température par défaut, ou humidity, lux, co2, value) ; consignes R1VARSETPOINT, R2VARSETPOINT (lecture seule, affichées comme des températures). Un module non listé montre A1 et A2, en lecture seule."
       },
       "placeholder": {
         "en": "M5.A1:light, M5.R3:switch, M7.TVAR",

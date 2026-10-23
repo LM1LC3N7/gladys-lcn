@@ -157,7 +157,8 @@ export function convertVariable(native, kind) {
       return within(native, 0, 10_000);
     case 'lux':
       // I-port light sensor; over 1152 the hardware gives nothing (pypck).
-      return native > 1152 ? undefined : Math.round(Math.exp(native / 100));
+      // Capped to the maximum the feature declares.
+      return native > 1152 ? undefined : Math.min(100_000, Math.round(Math.exp(native / 100)));
     case 'value':
       return native;
     default:

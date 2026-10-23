@@ -62,6 +62,8 @@ export const LIMITS = {
   priorityStates: 60,
   /** Scene events per minute (the core admits 300): key events over it are dropped. */
   eventsPerMinute: 120,
+  /** Sessions ended after the password and before "OK", in a row: a refusal. */
+  authDrops: 2,
   /** Pause after a licence error of PCHK, at most (persisted, read back capped). */
   maxPause: 6 * 60 * 60_000,
 };

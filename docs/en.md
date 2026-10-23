@@ -25,7 +25,8 @@ LCN-PKU or LCN-PCK coupler.
   - **variables** TVAR, R1VAR, R2VAR, VAR1 to VAR12: a temperature (°C, by
     default), `humidity` (%), `lux` (light sensor on the I port), `co2`
     (ppm) or a raw `value`;
-  - **set points** R1VARSETPOINT, R2VARSETPOINT of the regulators: read only.
+  - **set points** R1VARSETPOINT, R2VARSETPOINT of the regulators: read only,
+    shown as temperatures (never as a thermostat a voice assistant could set).
     A module not listed in Ports shows A1 and A2, read only.
 - The **keys a module sends to the host** (programmed with LCN-PRO) become a
   scene trigger "LCN key sent to the host": module (`M5`, or `S12M5` on
@@ -71,18 +72,28 @@ no longer declared as such.
   is confirmed only by a status of the port, received after it, equal to the
   value asked; otherwise Gladys shows "sent, without confirmation" and the
   port is read again 2 s later.
-- A "turn off" (0 %, relay off) goes before every read and cancels a "turn
-  on" of the same port still waiting.
+- A "turn off" (0 %, relay off) has a queue of its own, written before every
+  other command and every read, without waiting for a quiet bus: a "turn
+  everything off" of 40 lights is written within the deadline. It cancels a
+  "turn on" of the same port, and an LCN scene of the same module, still
+  waiting. The status read after a command goes in the background (one per
+  port, merged); the modules also send their changes by themselves.
 - The options are checked when the command arrives and again right before it
   is written.
-- A user name or password refused by PCHK stops the connection: no new try
+- A user name or password refused by PCHK stops the connection, and so does a
+  session that PCHK closes right after the password, without an answer, twice
+  in a row: no new try
   with the same credentials, even after a restart (a salted fingerprint of the
   refused credentials is kept in `/data`, never the password; it is erased at
   the first successful login). Enter other credentials, or click "Test the
   connection" once fixed on the PCHK side (one try, never closer than 10 s to
   the last one).
 - A licence error of PCHK (all its connections taken) pauses for 5 min, then
-  15 min, 30 min, 1 h; the pause survives a restart.
+  15 min, 30 min, 1 h; the pause survives a restart, and "Test the connection"
+  says how long it still lasts instead of trying.
+- A user name or password holding a line break is never sent (a status says
+  so). An LCN scene goes only to a module of this integration (segment 0 or 5
+  to 127, module 5 to 254): never to PCHK nor to a broadcast address.
 - Connection attempts are spaced (10 s, 30 s, 1 min, 2 min, then 5 min) and a
   restart keeps the spacing; a full read of the states happens at most once a
   minute; "Scan" scans the bus at most once a minute.

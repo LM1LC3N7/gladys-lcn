@@ -31,4 +31,24 @@ the notes of the version's GitHub Release.
   attempts spaced, a restart included; "Test the connection".
 - Documentation in English and French.
 
+### Security
+
+- A "turn off" has its own queue, before every other command and every read:
+  a "turn everything off" of 40 lights is written within the deadline; it
+  also cancels a waiting LCN scene of the same module. The reads after a
+  command go in the background, merged.
+- A session closed by PCHK right after the password, twice in a row, stops
+  the connection like a refused login (persisted).
+- LCN scenes and commands only reach a module of this integration with a
+  valid address (segment 0 or 5-127, module 5-254): never PCHK nor a
+  broadcast; the scan ignores the other addresses.
+- Credentials holding a line break are never sent; the test button respects
+  the licence pause; a new configuration keeps the spacing of the attempts.
+
+### Changed
+
+- Set points are temperature sensors (read only), not thermostats; the
+  illuminance is capped to its declared maximum; catalog categories
+  "lighting" and "protocols".
+
 [Unreleased]: https://github.com/LM1LC3N7/gladys-lcn/commits/main

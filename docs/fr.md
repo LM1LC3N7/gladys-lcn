@@ -29,7 +29,8 @@ coupleur LCN-PKU ou LCN-PCK.
     défaut), `humidity` (%), `lux` (capteur de lumière sur le port I), `co2`
     (ppm) ou une valeur brute `value` ;
   - **consignes** R1VARSETPOINT, R2VARSETPOINT des régulateurs : en lecture
-    seule.
+    seule, affichées comme des températures (jamais comme un thermostat
+    qu'un assistant vocal pourrait régler).
     Un module absent de Ports montre A1 et A2, en lecture seule.
 - Les **touches qu'un module envoie à l'hôte** (programmées avec LCN-PRO)
   deviennent un déclencheur de scène « Touche LCN envoyée à l'hôte » : module
@@ -77,19 +78,29 @@ dès que le port n'est plus déclaré ainsi.
   elle n'est confirmée que par un état du port, reçu après elle, égal à la
   valeur demandée ; sinon Gladys affiche « envoyé, sans confirmation » et le
   port est relu 2 s plus tard.
-- Un « éteindre » (0 %, relais coupé) passe avant toute lecture et annule un
-  « allumer » du même port encore en attente.
+- Un « éteindre » (0 %, relais coupé) a sa propre file, écrite avant toute
+  autre commande et toute lecture, sans attendre un bus calme : un « éteins
+  tout » de 40 lumières est écrit dans l'échéance. Il annule un « allumer » du
+  même port, et une scène LCN du même module, encore en attente. La relecture
+  qui suit une commande passe en arrière-plan (une par port, regroupée) ; les
+  modules envoient aussi leurs changements d'eux-mêmes.
 - Les options sont vérifiées à l'arrivée de la commande et de nouveau juste
   avant son écriture.
 - Un nom d'utilisateur ou un mot de passe refusé par PCHK arrête la
-  connexion : aucun nouvel essai avec les mêmes identifiants, même après un
+  connexion, de même qu'une session que PCHK ferme juste après le mot de
+  passe, sans réponse, deux fois de suite : aucun nouvel essai avec les mêmes identifiants, même après un
   redémarrage (une empreinte salée des identifiants refusés est gardée dans
   `/data`, jamais le mot de passe ; elle est effacée à la première connexion
   réussie). Saisissez d'autres identifiants, ou cliquez sur « Tester la
   connexion » une fois corrigé côté PCHK (un essai, jamais à moins de 10 s du
   précédent).
 - Une erreur de licence de PCHK (toutes ses connexions prises) met en pause
-  5 min, puis 15 min, 30 min, 1 h ; la pause survit à un redémarrage.
+  5 min, puis 15 min, 30 min, 1 h ; la pause survit à un redémarrage, et
+  « Tester la connexion » indique le temps restant au lieu d'essayer.
+- Un nom d'utilisateur ou un mot de passe contenant un retour à la ligne
+  n'est jamais envoyé (un statut le dit). Une scène LCN ne va qu'à un module
+  de cette intégration (segment 0 ou 5 à 127, module 5 à 254) : jamais à PCHK
+  ni à une adresse de diffusion.
 - Les tentatives de connexion sont espacées (10 s, 30 s, 1 min, 2 min, puis
   5 min) et un redémarrage garde l'espacement ; une lecture complète des
   états a lieu au plus une fois par minute ; « Scanner » relance la recherche

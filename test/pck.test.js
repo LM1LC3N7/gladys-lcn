@@ -112,6 +112,7 @@ test('values of the variables (pypck VarValue)', () => {
   assert.equal(convertVariable(45, 'humidity'), 45);
   assert.equal(convertVariable(150, 'humidity'), undefined);
   assert.equal(convertVariable(690, 'lux'), Math.round(Math.exp(6.9)));
+  assert.equal(convertVariable(1152, 'lux'), 100_000, 'capped to the declared maximum');
   assert.equal(convertVariable(1200, 'lux'), undefined);
   assert.equal(convertVariable(800, 'co2'), 800);
   assert.equal(convertVariable(12345, 'value'), 12345);

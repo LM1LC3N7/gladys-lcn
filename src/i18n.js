@@ -58,6 +58,14 @@ export const T = {
     en: 'Enter the user name of LCN-PCHK in the configuration.',
     fr: "Saisissez le nom d'utilisateur de LCN-PCHK dans la configuration.",
   },
+  badCredentials: {
+    en: 'The user name or the password holds a line break or another control character: they are never sent. Type them again.',
+    fr: "Le nom d'utilisateur ou le mot de passe contient un retour à la ligne ou un autre caractère de contrôle : ils ne sont jamais envoyés. Saisissez-les de nouveau.",
+  },
+  sceneCancelled: {
+    en: 'A "turn off" of this module was asked meanwhile: the LCN scene was not sent.',
+    fr: "Un « éteindre » de ce module a été demandé entre-temps : la scène LCN n'a pas été envoyée.",
+  },
   connecting: { en: 'Connecting to LCN-PCHK…', fr: 'Connexion à LCN-PCHK…' },
   scanning: {
     en: 'Connected to LCN-PCHK; looking for the modules on the bus…',
@@ -94,8 +102,8 @@ export const T = {
       `LCN-PCHK a refusé la connexion : erreur de licence (toutes ses connexions sont prises). Nouvel essai dans ${minutes} min ; libérez une connexion de PCHK ou ajoutez une licence.`,
   },
   refused: {
-    en: 'LCN-PCHK refused the user name or the password. Connection stopped, no new try with these credentials: enter the right ones and save, or click "Test the connection" once fixed on the PCHK side.',
-    fr: "LCN-PCHK a refusé le nom d'utilisateur ou le mot de passe. Connexion arrêtée, sans nouvel essai avec ces identifiants : saisissez les bons puis enregistrez, ou cliquez sur « Tester la connexion » une fois corrigé côté PCHK.",
+    en: 'LCN-PCHK refused the user name or the password (or closed the session right after the password, twice in a row). Connection stopped, no new try with these credentials: enter the right ones and save, or click "Test the connection" once fixed on the PCHK side.',
+    fr: "LCN-PCHK a refusé le nom d'utilisateur ou le mot de passe (ou a fermé la session juste après le mot de passe, deux fois de suite). Connexion arrêtée, sans nouvel essai avec ces identifiants : saisissez les bons puis enregistrez, ou cliquez sur « Tester la connexion » une fois corrigé côté PCHK.",
   },
   tooSoon: {
     en: (seconds) => `A connection was tried just now; try again in ${seconds} s.`,
@@ -156,8 +164,8 @@ export const T = {
       `Envoyé sur le bus (${what}), sans confirmation du module dans les temps : l'état est relu dans 2 s.`,
   },
   scenePartial: {
-    en: 'The scene register was changed, but the scene itself was not sent (the option was switched off, or the connection ended).',
-    fr: "Le registre de scènes a été changé, mais la scène elle-même n'a pas été envoyée (l'option a été désactivée, ou la connexion a été coupée).",
+    en: 'The scene register was changed, but the scene itself was not sent (the option was switched off, a "turn off" of the module was asked, or the connection ended).',
+    fr: "Le registre de scènes a été changé, mais la scène elle-même n'a pas été envoyée (l'option a été désactivée, un « éteindre » du module a été demandé, ou la connexion a été coupée).",
   },
 };
 

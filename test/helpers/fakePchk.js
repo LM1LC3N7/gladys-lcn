@@ -115,6 +115,8 @@ export class FakePchk {
     username = 'lcn',
     password = 'secret',
     licence = false,
+    closeAfterPassword = false,
+    extraAcks = [],
   } = {}) {
     this.modules = modules;
     this.username = username;
@@ -127,6 +129,9 @@ export class FakePchk {
     this.hold = () => false;
     this.refuseConnections = 0;
     this.silent = false;
+    this.closeAfterPassword = closeAfterPassword;
+    /** Lines sent with the answers to a module scan (hostile addresses). */
+    this.extraAcks = extraAcks;
     this.connect = this.connect.bind(this);
   }
 
@@ -172,6 +177,11 @@ export class FakePchk {
       return;
     }
     if (socket.state === 'password') {
+      if (this.closeAfterPassword) {
+        // Some PCHK may just hang up on a wrong password.
+        socket.destroy();
+        return;
+      }
       if (socket.user === this.username && line === this.password) {
         socket.state = 'logged';
         socket.send('OK');
@@ -203,6 +213,7 @@ export class FakePchk {
         const [seg, module] = key.split('-').map(Number);
         if (seg === Number(m[1])) socket.send(`-M${pad3(seg)}${pad3(module)}!`);
       }
+      for (const extra of this.extraAcks) socket.send(extra);
       return;
     }
     m = /^>M(\d{3})(\d{3})[.!](.+)$/.exec(line);

@@ -63,16 +63,29 @@ export const moduleKey = (seg, module) => `${seg}-${module}`;
 /** How a module is written for the user (scene trigger, status, "Ports"): `M5`, `S12M5`. */
 export const moduleLabel = (seg, module) => (seg === 0 ? `M${module}` : `S${seg}M${module}`);
 
+/**
+ * A module address: segment 0 (local) or 5 to 127 (never 3, the broadcast,
+ * nor 4, the status messages), module 5 to 254 (never LCN-PRO, PCHK, an
+ * unprogrammed module).
+ */
+export const validAddress = (seg, module) =>
+  Number.isInteger(seg) &&
+  Number.isInteger(module) &&
+  (seg === 0 || (seg >= 5 && seg <= LIMITS.maxSegment)) &&
+  module >= LIMITS.minModule &&
+  module <= LIMITS.maxModule;
+
 /** `M5`, `5`, `m005`, `S12M5` -> { seg, module }, undefined if not a module. */
 export function parseModuleRef(raw) {
   const match = /^(?:S(\d{1,3}))?M?(\d{1,3})$/i.exec(String(raw ?? '').trim());
   if (!match) return undefined;
   const seg = match[1] === undefined ? 0 : Number(match[1]);
   const module = Number(match[2]);
-  if (seg > LIMITS.maxSegment || (seg !== 0 && seg < 5)) return undefined;
-  if (module < LIMITS.minModule || module > LIMITS.maxModule) return undefined;
-  return { seg, module };
+  return validAddress(seg, module) ? { seg, module } : undefined;
 }
+
+// eslint-disable-next-line no-control-regex
+const CONTROL = /[\u0000-\u001f\u007f]/;
 
 /** A port as written (`A1`, `R3`, `B2`, `TVAR`, `VAR5`, `R1VARSETPOINT`...) -> { port, family }. */
 export function parsePort(raw) {
@@ -152,13 +165,17 @@ export function normalizeConfig(raw = {}) {
     .trim()
     .toLowerCase();
   const ports = parsePorts(raw?.ports);
+  const username = typeof raw?.username === 'string' ? raw.username.slice(0, 64) : '';
+  const password = typeof raw?.password === 'string' ? raw.password.slice(0, 128) : '';
   return {
     host,
     // A port typed with the address wins over the port field (which has a default).
     port: hostPort ?? integer(raw?.port, DEFAULTS.port, 1, 65535),
     // As typed: PCHK compares them as they are.
-    username: typeof raw?.username === 'string' ? raw.username.slice(0, 64) : '',
-    password: typeof raw?.password === 'string' ? raw.password.slice(0, 128) : '',
+    username,
+    password,
+    // A line break would make two PCK lines: such credentials are never sent.
+    credentialsInvalid: CONTROL.test(username) || CONTROL.test(password),
     dim200: (DIM_MODES.includes(dimMode) ? dimMode : DEFAULTS.dim_mode) === 'steps200',
     ports: ports.modules,
     portErrors: ports.errors,
