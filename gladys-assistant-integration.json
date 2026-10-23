@@ -1,177 +1,437 @@
 {
   "manifest_version": 1,
   "type": "device",
-  "name": "Demo Devices Template",
+  "name": "LCN",
   "description": {
-    "en": "Starter template showing sensors, a switch, a dimmable light and a smart plug.",
-    "fr": "Template de démarrage : capteurs, interrupteur, lampe variable et prise connectée."
+    "en": "LCN building automation (outputs, relays, sensors, scenes) through LCN-PCHK.",
+    "fr": "Domotique de bâtiment LCN (sorties, relais, capteurs, scènes) via LCN-PCHK."
   },
-  "version": "1.0.0",
-  "docker_image": "ghcr.io/gladysassistant/integration-template-js:1.0.0",
+  "version": "0.1.0",
+  "docker_image": "ghcr.io/lm1lc3n7/gladys-lcn:0.1.0",
   "gladys_version": ">=5.1.0",
-  "cover_image": "https://raw.githubusercontent.com/GladysAssistant/integration-template-js/master/cover.png",
-  "categories": ["lighting", "security", "environment"],
-  "transports": ["local", "cloud"],
+  "cover_image": "https://raw.githubusercontent.com/LM1LC3N7/gladys-lcn/main/cover.png",
+  "categories": ["lighting", "security"],
+  "transports": ["local"],
   "config_schema": [
     {
       "key": "intro",
       "type": "section",
-      "label": { "en": "Getting started", "fr": "Pour commencer" },
+      "label": {
+        "en": "Your LCN installation",
+        "fr": "Votre installation LCN"
+      },
       "description": {
-        "en": "The demo weather station reads real data from the free Open-Meteo API: pick the coordinates to observe. No account, no API key.",
-        "fr": "La station météo de démonstration lit de vraies données via l'API gratuite Open-Meteo : choisissez les coordonnées à observer. Pas de compte, pas de clé d'API."
+        "en": "For LCN installations reached through LCN-PCHK (the coupler software of LCN, with its licence) on a computer of your network. The integration logs in to PCHK, looks for the modules on the bus and reads their outputs, relays, binary sensors and variables; the keys a module sends to the host become scene triggers. Outputs and relays are read only unless you declare them as lights or switches in \"Ports\". One connection of PCHK is used. Never tested with a real installation. Unofficial, not affiliated with LCN.",
+        "fr": "Pour les installations LCN joignables par LCN-PCHK (le logiciel coupleur de LCN, avec sa licence) sur un ordinateur de votre réseau. L'intégration se connecte à PCHK, recherche les modules sur le bus et lit leurs sorties, relais, capteurs binaires et variables ; les touches qu'un module envoie à l'hôte deviennent des déclencheurs de scène. Sorties et relais sont en lecture seule tant que vous ne les déclarez pas comme lumières ou interrupteurs dans « Ports ». Une connexion de PCHK est utilisée. Jamais testé avec une vraie installation. Non officiel, sans lien avec LCN."
       },
       "links": [
         {
-          "url": "https://open-meteo.com/en/docs",
-          "label": { "en": "Open-Meteo documentation", "fr": "Documentation Open-Meteo" }
+          "url": "https://github.com/LM1LC3N7/gladys-lcn/blob/main/docs/fr.md",
+          "label": {
+            "en": "Guide (French)",
+            "fr": "Guide (français)"
+          }
+        },
+        {
+          "url": "https://github.com/LM1LC3N7/gladys-lcn/blob/main/docs/en.md",
+          "label": {
+            "en": "Guide (English)",
+            "fr": "Guide (anglais)"
+          }
         }
       ]
     },
     {
-      "key": "latitude",
-      "type": "number",
-      "label": { "en": "Latitude", "fr": "Latitude" },
-      "description": {
-        "en": "Latitude used for the demo weather sensor.",
-        "fr": "Latitude utilisée par le capteur météo de démonstration."
+      "key": "host",
+      "type": "string",
+      "label": {
+        "en": "Address of LCN-PCHK",
+        "fr": "Adresse de LCN-PCHK"
       },
-      "placeholder": { "en": "e.g. 48.8566", "fr": "ex. 48.8566" },
-      "required": true,
-      "default": 48.8566,
-      "min": -90,
-      "max": 90
+      "description": {
+        "en": "The IP address (or name) of the computer running LCN-PCHK; give it a fixed address in your router.",
+        "fr": "L'adresse IP (ou le nom) de l'ordinateur où tourne LCN-PCHK ; donnez-lui une adresse fixe dans votre box."
+      },
+      "placeholder": {
+        "en": "192.168.1.40",
+        "fr": "192.168.1.40"
+      },
+      "required": true
     },
     {
-      "key": "longitude",
+      "key": "port",
       "type": "number",
-      "label": { "en": "Longitude", "fr": "Longitude" },
-      "description": {
-        "en": "Longitude used for the demo weather sensor.",
-        "fr": "Longitude utilisée par le capteur météo de démonstration."
+      "label": {
+        "en": "Port",
+        "fr": "Port"
       },
-      "placeholder": { "en": "e.g. 2.3522", "fr": "ex. 2.3522" },
-      "required": true,
-      "default": 2.3522,
-      "min": -180,
-      "max": 180
-    },
-    {
-      "key": "unit",
-      "type": "select",
-      "label": { "en": "Temperature unit", "fr": "Unité de température" },
+      "description": {
+        "en": "4114 unless PCHK uses another one.",
+        "fr": "4114 sauf si PCHK en utilise un autre."
+      },
       "required": false,
-      "default": "celsius",
+      "default": 4114,
+      "min": 1,
+      "max": 65535
+    },
+    {
+      "key": "username",
+      "type": "string",
+      "label": {
+        "en": "PCHK user name",
+        "fr": "Nom d'utilisateur de PCHK"
+      },
+      "description": {
+        "en": "The user name set in LCN-PCHK.",
+        "fr": "Le nom d'utilisateur défini dans LCN-PCHK."
+      },
+      "placeholder": {
+        "en": "lcn",
+        "fr": "lcn"
+      },
+      "required": true
+    },
+    {
+      "key": "password",
+      "type": "secret",
+      "label": {
+        "en": "PCHK password",
+        "fr": "Mot de passe de PCHK"
+      },
+      "description": {
+        "en": "Kept by Gladys in its database, never shown again, sent only to PCHK, never written in the logs. PCHK receives it in clear text on your network (its protocol is not protected). A password refused by PCHK stops the connection: no new try with it.",
+        "fr": "Gardé par Gladys dans sa base, jamais réaffiché, envoyé seulement à PCHK, jamais écrit dans les journaux. PCHK le reçoit en clair sur votre réseau (son protocole n'est pas protégé). Un mot de passe refusé par PCHK arrête la connexion : aucun nouvel essai avec lui."
+      },
+      "required": false
+    },
+    {
+      "key": "dim_mode",
+      "type": "select",
+      "label": {
+        "en": "Dimming mode",
+        "fr": "Mode de variation"
+      },
+      "description": {
+        "en": "As programmed with LCN-PRO: 200 steps when every module dates from 2013 (firmware 170206) or later, else 50 steps.",
+        "fr": "Comme programmé avec LCN-PRO : 200 pas quand tous les modules datent de 2013 (firmware 170206) ou après, sinon 50 pas."
+      },
+      "required": false,
+      "default": "steps200",
       "options": [
-        { "value": "celsius", "label": { "en": "Celsius", "fr": "Celsius" } },
-        { "value": "fahrenheit", "label": { "en": "Fahrenheit", "fr": "Fahrenheit" } }
+        {
+          "value": "steps200",
+          "label": {
+            "en": "200 steps",
+            "fr": "200 pas"
+          }
+        },
+        {
+          "value": "steps50",
+          "label": {
+            "en": "50 steps",
+            "fr": "50 pas"
+          }
+        }
       ]
     },
     {
-      "key": "poll_frequency",
-      "type": "number",
-      "label": { "en": "Refresh interval (s)", "fr": "Intervalle de rafraîchissement (s)" },
+      "key": "ports",
+      "type": "string",
+      "label": {
+        "en": "Ports",
+        "fr": "Ports"
+      },
       "description": {
-        "en": "How often sensors are polled, in seconds (one minute minimum).",
-        "fr": "Fréquence d'interrogation des capteurs, en secondes (une minute minimum)."
+        "en": "What each module shows, e.g. \"M5.A1:light, M5.R3:switch, M5.B1:motion, M7.TVAR, M7.VAR4:humidity\" (module as in LCN-PRO, S12M5 on segment 12). Outputs A1-A4 and relays R1-R8: read only by default, \"light\" or \"switch\" to control them; a light or a switch obeys Google, Alexa, the MCP (\"turn everything off\") and the scenes: never declare a pump, a heater, a door strike or a valve. Binary sensors B1-B8 (\"motion\" optional); variables TVAR, R1VAR, R2VAR, VAR1-VAR12 (temperature by default, or humidity, lux, co2, value); set points R1VARSETPOINT, R2VARSETPOINT (read only). A module not listed shows A1 and A2, read only.",
+        "fr": "Ce que montre chaque module, par ex. « M5.A1:light, M5.R3:switch, M5.B1:motion, M7.TVAR, M7.VAR4:humidity » (module comme dans LCN-PRO, S12M5 sur le segment 12). Sorties A1-A4 et relais R1-R8 : lecture seule par défaut, « light » ou « switch » pour les commander ; une lumière ou un interrupteur obéit à Google, Alexa, au MCP (« éteins tout ») et aux scènes : ne déclarez jamais une pompe, un chauffage, une gâche ou une vanne. Capteurs binaires B1-B8 (« motion » en option) ; variables TVAR, R1VAR, R2VAR, VAR1-VAR12 (température par défaut, ou humidity, lux, co2, value) ; consignes R1VARSETPOINT, R2VARSETPOINT (lecture seule). Un module non listé montre A1 et A2, en lecture seule."
+      },
+      "placeholder": {
+        "en": "M5.A1:light, M5.R3:switch, M7.TVAR",
+        "fr": "M5.A1:light, M5.R3:switch, M7.TVAR"
+      },
+      "required": false
+    },
+    {
+      "key": "safety",
+      "type": "section",
+      "label": {
+        "en": "Commands of the ports not declared",
+        "fr": "Commandes des ports non déclarés"
+      },
+      "description": {
+        "en": "A read-only output or relay has \"turn on\" and \"turn off\" buttons, and LCN scenes can be activated from a Gladys scene: both switch loads Gladys does not know (a pump, a heater, a door strike...), so both are off by default. Once allowed, every Gladys user and every scene can use them; each command is written in the integration logs.",
+        "fr": "Une sortie ou un relais en lecture seule a des boutons « allumer » et « éteindre », et des scènes LCN peuvent être activées depuis une scène Gladys : les deux commandent des charges que Gladys ne connaît pas (une pompe, un chauffage, une gâche…), donc les deux sont désactivés par défaut. Une fois autorisés, tout utilisateur de Gladys et toute scène peuvent s'en servir ; chaque commande est écrite dans les journaux de l'intégration."
+      }
+    },
+    {
+      "key": "allow_output_buttons",
+      "type": "boolean",
+      "label": {
+        "en": "Allow the \"turn on\" / \"turn off\" buttons of the read-only ports",
+        "fr": "Autoriser les boutons « allumer » / « éteindre » des ports en lecture seule"
       },
       "required": false,
-      "default": 300,
-      "min": 60,
-      "max": 3600
+      "default": false
+    },
+    {
+      "key": "allow_scenes",
+      "type": "boolean",
+      "label": {
+        "en": "Allow activating LCN scenes from Gladys scenes",
+        "fr": "Autoriser l'activation des scènes LCN depuis les scènes Gladys"
+      },
+      "required": false,
+      "default": false
+    },
+    {
+      "key": "language",
+      "type": "select",
+      "label": {
+        "en": "Language of the names",
+        "fr": "Langue des noms"
+      },
+      "description": {
+        "en": "Used for the names of the devices and features added from now on.",
+        "fr": "Sert aux noms des appareils et fonctionnalités ajoutés désormais."
+      },
+      "required": false,
+      "default": "fr",
+      "options": [
+        {
+          "value": "fr",
+          "label": {
+            "en": "French",
+            "fr": "Français"
+          }
+        },
+        {
+          "value": "en",
+          "label": {
+            "en": "English",
+            "fr": "Anglais"
+          }
+        }
+      ]
     }
   ],
   "actions": [
     {
-      "key": "test_weather",
-      "label": { "en": "Test the weather provider", "fr": "Tester le fournisseur météo" },
+      "key": "test_connection",
+      "label": {
+        "en": "Test the connection",
+        "fr": "Tester la connexion"
+      },
       "timeout_seconds": 30
-    },
-    {
-      "key": "identify",
-      "label": { "en": "Identify a device", "fr": "Identifier un appareil" },
-      "fields": [
-        {
-          "key": "device",
-          "type": "select",
-          "source": "devices",
-          "label": { "en": "Device", "fr": "Appareil" },
-          "required": true
-        }
-      ]
     }
   ],
   "scene_triggers": [
     {
-      "key": "motion_detected",
-      "label": { "en": "Motion detected", "fr": "Mouvement détecté" },
+      "key": "key",
+      "label": {
+        "en": "LCN key sent to the host",
+        "fr": "Touche LCN envoyée à l'hôte"
+      },
       "description": {
-        "en": "A demo motion sensor saw a person or an animal move.",
-        "fr": "Un détecteur de démonstration a vu bouger une personne ou un animal."
+        "en": "A module sends a key to the host (programmed with LCN-PRO: \"send keys to the host\"). The module is compared as written: M5, or S12M5 on segment 12, upper case. Leave a field empty to match any value.",
+        "fr": "Un module envoie une touche à l'hôte (programmé avec LCN-PRO : « envoyer des touches à l'hôte »). Le module est comparé tel quel : M5, ou S12M5 sur le segment 12, en majuscules. Laissez un champ vide pour accepter toute valeur."
       },
       "fields": [
         {
-          "key": "device",
-          "type": "select",
-          "source": "devices",
-          "label": { "en": "Sensor", "fr": "Détecteur" }
+          "key": "module",
+          "type": "string",
+          "label": {
+            "en": "Module (e.g. M5)",
+            "fr": "Module (ex. M5)"
+          }
         },
         {
-          "key": "target",
-          "type": "multi_select",
-          "label": { "en": "What moved", "fr": "Ce qui a bougé" },
+          "key": "table",
+          "type": "select",
+          "label": {
+            "en": "Key table",
+            "fr": "Table de touches"
+          },
           "options": [
-            { "value": "person", "label": { "en": "Person", "fr": "Personne" } },
-            { "value": "animal", "label": { "en": "Animal", "fr": "Animal" } }
+            {
+              "value": "A",
+              "label": {
+                "en": "Table A",
+                "fr": "Table A"
+              }
+            },
+            {
+              "value": "B",
+              "label": {
+                "en": "Table B",
+                "fr": "Table B"
+              }
+            },
+            {
+              "value": "C",
+              "label": {
+                "en": "Table C",
+                "fr": "Table C"
+              }
+            }
+          ]
+        },
+        {
+          "key": "key",
+          "type": "number",
+          "label": {
+            "en": "Key",
+            "fr": "Touche"
+          },
+          "min": 1,
+          "max": 8
+        },
+        {
+          "key": "action",
+          "type": "select",
+          "label": {
+            "en": "Action",
+            "fr": "Action"
+          },
+          "options": [
+            {
+              "value": "hit",
+              "label": {
+                "en": "Short press (hit)",
+                "fr": "Appui court (hit)"
+              }
+            },
+            {
+              "value": "make",
+              "label": {
+                "en": "Long press (make)",
+                "fr": "Appui long (make)"
+              }
+            },
+            {
+              "value": "break",
+              "label": {
+                "en": "Release (break)",
+                "fr": "Relâchement (break)"
+              }
+            }
           ]
         }
       ],
       "variables": [
         {
-          "key": "target",
+          "key": "module",
           "type": "string",
-          "label": { "en": "What moved", "fr": "Ce qui a bougé" }
+          "label": {
+            "en": "Module",
+            "fr": "Module"
+          }
+        },
+        {
+          "key": "table",
+          "type": "string",
+          "label": {
+            "en": "Key table",
+            "fr": "Table de touches"
+          }
+        },
+        {
+          "key": "key",
+          "type": "number",
+          "label": {
+            "en": "Key",
+            "fr": "Touche"
+          }
+        },
+        {
+          "key": "action",
+          "type": "string",
+          "label": {
+            "en": "Action",
+            "fr": "Action"
+          }
         }
       ]
     }
   ],
   "scene_actions": [
     {
-      "key": "identify_device",
-      "label": { "en": "Identify a device", "fr": "Identifier un appareil" },
-      "description": {
-        "en": "Make a device signal itself (the demo light blinks).",
-        "fr": "Fait se signaler un appareil (la lampe de démonstration clignote)."
+      "key": "activate_scene",
+      "label": {
+        "en": "Activate an LCN scene",
+        "fr": "Activer une scène LCN"
       },
-      "timeout_seconds": 15,
+      "description": {
+        "en": "Activates a scene stored in an LCN module (register 0-9, scene 0-9), for its outputs, its relays or both. Off by default: allow it in the configuration.",
+        "fr": "Active une scène enregistrée dans un module LCN (registre 0-9, scène 0-9), pour ses sorties, ses relais ou les deux. Désactivé par défaut : autorisez-le dans la configuration."
+      },
+      "timeout_seconds": 10,
       "fields": [
         {
-          "key": "device",
+          "key": "module",
           "type": "select",
           "source": "devices",
-          "label": { "en": "Device", "fr": "Appareil" },
+          "label": {
+            "en": "LCN module",
+            "fr": "Module LCN"
+          },
           "required": true
-        }
-      ],
-      "outputs": [
+        },
         {
-          "key": "signalled",
-          "type": "boolean",
-          "label": { "en": "Device signalled", "fr": "Appareil signalé" }
+          "key": "register",
+          "type": "number",
+          "label": {
+            "en": "Scene register (0-9)",
+            "fr": "Registre de scènes (0-9)"
+          },
+          "min": 0,
+          "max": 9,
+          "required": true
+        },
+        {
+          "key": "scene",
+          "type": "number",
+          "label": {
+            "en": "Scene (0-9)",
+            "fr": "Scène (0-9)"
+          },
+          "min": 0,
+          "max": 9,
+          "required": true
+        },
+        {
+          "key": "target",
+          "type": "select",
+          "label": {
+            "en": "For",
+            "fr": "Pour"
+          },
+          "required": false,
+          "default": "both",
+          "options": [
+            {
+              "value": "outputs",
+              "label": {
+                "en": "The outputs",
+                "fr": "Les sorties"
+              }
+            },
+            {
+              "value": "relays",
+              "label": {
+                "en": "The relays",
+                "fr": "Les relais"
+              }
+            },
+            {
+              "value": "both",
+              "label": {
+                "en": "Outputs and relays",
+                "fr": "Sorties et relais"
+              }
+            }
+          ]
         }
       ]
-    }
-  ],
-  "widgets": [
-    {
-      "key": "demo_status",
-      "label": { "en": "Demo status", "fr": "État de la démo" },
-      "description": {
-        "en": "Live temperature and plug power, plug connection and observed location.",
-        "fr": "Température et puissance en direct, connexion de la prise, position observée."
-      },
-      "icon": "activity",
-      "action_timeout_seconds": 15
     }
   ]
 }

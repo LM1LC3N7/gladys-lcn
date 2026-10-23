@@ -1,61 +1,97 @@
-# Demo Devices Template
+# LCN for Gladys Assistant
 
-This is the user documentation of the integration. Gladys re-hosts this file
-and shows a permanent **Documentation** link to it in the Configuration screen
-(in the user's language, with English as the fallback) — it is when
-configuring that the user needs it most. Keep the short onboarding hints in
-the `section` blocks of the manifest `config_schema`; put the long
-step-by-step (screenshots, troubleshooting…) here.
+This integration connects Gladys to an **LCN** installation (Local Control
+Network, building automation sold mostly in Germany, Austria and
+Switzerland) through **LCN-PCHK**, the coupler software of LCN that runs on a
+computer of your network (with its licence) and is wired to the bus by an
+LCN-PKU or LCN-PCK coupler.
 
-## What you get
+> **Never tested with a real device** nor a real installation: the protocol
+> is ported from pypck, the library of the Home Assistant LCN integration.
+> Unofficial, not affiliated with LCN (ISSENDORFF KG).
 
-Six demo devices show up after installation: a weather station (real data
-from Open-Meteo), a switch, a dimmable light, a smart plug with power
-metering, a motion sensor and a camera.
+## What it does
+
+- Logs in to PCHK with its user name and password, finds the segment
+  couplers, then every module of the bus (the same scan as pypck), with its
+  serial number, firmware, hardware type and the name set in LCN-PRO.
+- One Gladys device per module. Its features come from the **Ports** field:
+  - **outputs A1 to A4** and **relays R1 to R8**: **read only by default**
+    (their state, and the level of an output) with "turn on" / "turn off"
+    buttons that are **off by default**. Declared `light` (an output: a light
+    with its brightness; a relay: an on/off light) or `switch`, they can be
+    controlled from Gladys;
+  - **binary sensors B1 to B8**: an input, or a motion sensor (`motion`);
+  - **variables** TVAR, R1VAR, R2VAR, VAR1 to VAR12: a temperature (°C, by
+    default), `humidity` (%), `lux` (light sensor on the I port), `co2`
+    (ppm) or a raw `value`;
+  - **set points** R1VARSETPOINT, R2VARSETPOINT of the regulators: read only.
+    A module not listed in Ports shows A1 and A2, read only.
+- The **keys a module sends to the host** (programmed with LCN-PRO) become a
+  scene trigger "LCN key sent to the host": module (`M5`, or `S12M5` on
+  segment 12), key table A to C, key 1 to 8, short press (hit), long press
+  (make) or release (break).
+- A scene action "Activate an LCN scene" (register 0-9, scene 0-9, for the
+  outputs, the relays or both), **off by default**.
 
 ## Configuration
 
-1. Open the **Configuration** tab of the integration.
-2. Set the **latitude** and **longitude** the demo weather station should
-   observe (they default to Paris), and pick your temperature unit.
-   The **refresh interval** sets how often the weather station and the
-   plug's power are read: every 5 minutes by default, every minute at most.
-3. Save: the devices appear in the **Discovery** tab, ready to be added.
+| Field                                    | What to enter                                                                                                                                                                                                                                                  |
+| ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Address of LCN-PCHK                      | The IP address of the computer running PCHK (give it a fixed address).                                                                                                                                                                                         |
+| Port                                     | 4114 unless changed in PCHK.                                                                                                                                                                                                                                   |
+| User name, password                      | Those of PCHK. The password is a secret field: kept by Gladys in its database, never shown again, sent only to PCHK, never written in the logs. PCHK receives it in clear text on your network: its protocol is not protected, keep PCHK on a trusted network. |
+| Dimming mode                             | 200 steps when every module has a firmware from 2013 (170206) or later, as LCN-PRO programs it; else 50 steps.                                                                                                                                                 |
+| Ports                                    | See below.                                                                                                                                                                                                                                                     |
+| Allow the "turn on" / "turn off" buttons | Off by default.                                                                                                                                                                                                                                                |
+| Allow activating LCN scenes              | Off by default.                                                                                                                                                                                                                                                |
 
-The **Prefer the local connection** toggle drives the demo plug: it reports
-the channel it actually uses as a badge (local or cloud), with an orange dot
-when it runs degraded (local refused, cloud fallback).
+### Ports
 
-## Actions
+Entries separated by commas: `module.port` or `module.port:kind`, the module
+as LCN-PRO numbers it (`M5`, `5`, or `S12M5` on segment 12). Example:
 
-- **Test the weather provider** — performs a live request to Open-Meteo and
-  shows the current temperature and humidity under the button.
-- **Identify a device** — pick one of your devices in the list and it will
-  signal itself (the demo light "blinks" in the logs).
+```
+M5.A1:light, M5.A2:switch, M5.R3:switch, M5.B1:motion, M7.TVAR, M7.VAR4:humidity, M7.R1VARSETPOINT
+```
 
-## Scenes
+**Never declare as `light` or `switch` a port that drives a pump, a heater,
+a boiler demand, a door strike, a valve, a freezer or anything a sudden "off"
+or "on" could harm**: a light or a switch obeys Google Home, Alexa, the MCP
+("turn everything off") and every scene. Keep such ports read only.
 
-The integration adds its own cards to the scene editor (Gladys 5.1 or
-later), under the **Integrations** category:
+A port that changes kind gets new features; the ones you already created
+are kept with their history (delete them in Gladys if you no longer want
+them). A light or a switch kept from before refuses commands once the port is
+no longer declared as such.
 
-- **Motion detected** (trigger) — starts the scene when a demo motion sensor
-  sees something move. Optionally pick the sensor and what moved (person,
-  animal); left empty, any detection matches. The following actions can
-  read what moved with `{{triggerEvent.data.target}}`.
-- **Identify a device** (action) — makes the chosen device signal itself.
-  It returns whether the device could signal itself, so the following
-  actions can depend on it.
+## Safety
 
-## Dashboard
+- A command is written within 3.5 s or not at all ("nothing was sent"); it
+  is confirmed only by a status of the port, received after it, equal to the
+  value asked; otherwise Gladys shows "sent, without confirmation" and the
+  port is read again 2 s later.
+- A "turn off" (0 %, relay off) goes before every read and cancels a "turn
+  on" of the same port still waiting.
+- The options are checked when the command arrives and again right before it
+  is written.
+- A user name or password refused by PCHK stops the connection: no new try
+  with the same credentials, even after a restart (a salted fingerprint of the
+  refused credentials is kept in `/data`, never the password; it is erased at
+  the first successful login). Enter other credentials, or click "Test the
+  connection" once fixed on the PCHK side (one try, never closer than 10 s to
+  the last one).
+- A licence error of PCHK (all its connections taken) pauses for 5 min, then
+  15 min, 30 min, 1 h; the pause survives a restart.
+- Connection attempts are spaced (10 s, 30 s, 1 min, 2 min, then 5 min) and a
+  restart keeps the spacing; a full read of the states happens at most once a
+  minute; "Scan" scans the bus at most once a minute.
 
-Add the **Demo status** widget to a dashboard: it shows the live
-temperature of the weather station and the power of the office plug, the
-connection the plug currently uses (orange when degraded) and the observed
-location. Its **Identify the light** button makes the demo light signal
-itself.
+## Limits
 
-## Troubleshooting
-
-The integration logs everything it does: check the integration logs from the
-Gladys UI (or `docker logs` on the host) with `LOG_LEVEL=debug` for the full
-detail.
+- LCN-PCHK only: no LCN-PKE (direct IP coupler) nor USB.
+- No covers (motors), thresholds, LEDs, key locks, regulator locks or
+  access control in this version; set points are read only.
+- The modules that do not answer the scan can be listed in Ports.
+- The bus does not say which ports are wired: list them in Ports.
+- Docker is not used during development: the image was never run in Gladys.
